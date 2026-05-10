@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple
 
+import requests
+from requests import HTTPError
 from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent, RegexMatchingEventHandler
 from watchdog.observers import Observer
 from win11toast import toast
@@ -37,18 +39,27 @@ class ChangeHandler(FileSystemEventHandler):
                 solution_filename = Path(path).name
                 puzzle_name = extract_puzzle_name(solution_filename)
                 sum3 = self.calculate_sum(solution)
+                output_strings = []
                 if self.last_solution.solved:
                     delta_last = self.calculate_delta(solution, self.last_solution)
                     delta_last_expanded = self.calculate_delta_expanded(solution, self.last_solution)
-                    output_string = self.format_output_delta(solution, sum3, delta_last, delta_last_expanded)
-                else:
-                    output_string = self.format_output(solution, sum3)
-                toast(f"{puzzle_name}", output_string, scenario="reminder",
+                    string = self.format_output_delta(solution, self.last_solution, sum3, delta_last, delta_last_expanded)
+                    output_strings.append(string)
+                best_solution = self.find_best(solution)
+                delta_best = self.calculate_delta(solution, best_solution)
+                delta_best_expanded = self.calculate_delta_expanded(solution, best_solution)
+                output_string = self.format_output_delta(solution, best_solution, sum3, delta_best, delta_best_expanded)
+                # print(output_string)
+                output_strings.append(output_string)
+                output = "\n".join(output_strings)
+                # print(output)
+                toast(f"{puzzle_name}", output, scenario="reminder", duration="long",
                       audio=True,  # results in silent?
                       app_id=WINDOWS_APP_ID,
                       on_dismissed=lambda *args: None)  # to suppress timeout notification in console
 
                 self.last_solution = solution
+                self.last_solution.source_name = 'last solve'
         except ValueError as e:
             print(f'om.py threw an Exception, probably harmless: {e}')
             # om.py shows a value error if script is started before Opus Magnum.
@@ -69,13 +80,37 @@ class ChangeHandler(FileSystemEventHandler):
         #sum4_delta = sum3_delta + (solution1.instructions - solution2.instructions)
         return sum3_delta
 
-    # def find_best_with_source_name(self, solution: om.Solution) -> Tuple[om.Solution, str]:
-    def format_output_delta(self, solution, sum3, delta_last, delta_expanded):
-        return (f"\u0394last solution:\n"
-                f"Sum3: {sum3} ({delta_last:+})\n"
+    def find_best(self, solution: om.Solution) -> om.Solution:
+        online = self.fetch_online(solution.puzzle.decode())
+        if online:
+            field = [online]
+        else:
+            raise HTTPError("Could not request online")
+        return field[0]
+
+    def fetch_online(self, for_puzzle: str) -> om.Solution | None:
+        online_record_request = requests.get(
+            f"https://zlbb.faendir.com/om/puzzle/{for_puzzle}/category/SUM/record",
+            headers={"accept": "application/json"})
+        if online_record_request.status_code == 200:
+            response = online_record_request.json()
+            online_score = response['score']
+            artificial_online_solution = om.Solution()
+            artificial_online_solution.cycles = online_score['cycles']
+            artificial_online_solution.area = online_score['area']
+            artificial_online_solution.cost = online_score['cost']
+            artificial_online_solution.instructions = online_score['instructions']
+            artificial_online_solution.source_name = "online"
+            artificial_online_solution.link = f"https://zlbb.faendir.com/puzzles/{for_puzzle}/records"
+            return artificial_online_solution
+        else:
+            print(f"Warning: Could not fetch online record ({online_record_request.status_code})\n {online_record_request}")
+            return None
+
+    def format_output_delta(self, solution, comparing_to_solution, sum3, delta, delta_expanded):
+        return (f"Sum3: {sum3} ({delta:+}) \t\t\u0394{comparing_to_solution.source_name}\n"
                 f"{solution.cost}g({delta_expanded[0]:+})/{solution.cycles}c({delta_expanded[1]:+})"
-                f"/{solution.area}a({delta_expanded[2]:+})\n\n"
-                f"\u0394best solution:\n")
+                f"/{solution.area}a({delta_expanded[2]:+})")
 
     def format_output(self, solution, sum3):
         return (f"Sum3: {sum3}\n"
