@@ -1,4 +1,6 @@
+import math
 import re
+from glob import glob
 from pprint import pprint
 import time
 
@@ -17,17 +19,16 @@ import om
 
 
 WINDOWS_APP_ID = "Opus Magnum Sum Calculator"
-ONLINE_TIMEOUT = 2.0
+ONLINE_TIMEOUT = 4.0
 
 
-def extract_puzzle_name(solution_filename: str) -> str:
+def extract_solution_base_name(solution_filename: str) -> str:
     # TODO: can I get the display_name from om somehow? Fetching from https://zlbb.faendir.com/swagger-ui seems overkill
     # but I need it to calculate local best
     match = re.match("([a-zA-Z]*-?)*", solution_filename)
     if match is None:
-        raise ValueError(f"Invalid solution name: {solution_filename} -> no puzzle name extractable.")
-    text_only = match.group(0)[:-1].replace("-", " ")
-    return text_only.title()
+        raise ValueError(f"Invalid solution name: {solution_filename} -> no base name extractable.")
+    return match.group(0)[:-1]
 
 
 def solution_sum(solution: om.Solution) -> int:
@@ -67,11 +68,23 @@ def fetch_online(url: str) -> om.Solution | None:
         return None
 
 
+def find_local_best(current_path: Path, puzzle_display_name) -> om.Solution:
+    results = current_path.parent.glob(f"{puzzle_display_name}*")
+    best = min(
+        filter(lambda s: s.solved,
+               map(lambda r: om.Solution(str(r)),
+                   filter(lambda r: r!= current_path,
+                          results))),
+        key=lambda s: solution_sum(s)
+    )
+    return best
+
+
 def format_output(solution, deltas):
     part1 = f"Sum3:\t{solution_sum(solution)}\t\t{solution.cost}g/{solution.cycles}c/{solution.area}a"
     strings = [part1]
     for name, delta in deltas.items():
-        s = f"\u0394{name}:\t{delta['score']}({delta['delta']:+})  \t{delta['cost']:+}g/{delta['cycles']:+}c/{delta['area']:+}a"
+        s = f"\u0394{name}:\t{delta['delta']:+} ({delta['score']})   \t{delta['cost']:+}g/{delta['cycles']:+}c/{delta['area']:+}a"
         strings.append(s)
     return "\n".join(strings)
 
@@ -86,9 +99,6 @@ def windows_toast(title, output):
 class ChangeHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_solution: om.Solution = om.Solution()
-
-    def test(self):
-        print( 'test')
 
     def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
         # print(event)
@@ -105,30 +115,28 @@ class ChangeHandler(FileSystemEventHandler):
                     solution.area != self.last_solution.area
                 )):
                 solution_filename = Path(path).name
-                puzzle_name = extract_puzzle_name(solution_filename)
-                output = self.create_output(solution)
+                base_name = extract_solution_base_name(solution_filename)
+                local_best = find_local_best(Path(path), base_name)
+                output = self.create_output(solution, local_best)
                 print(output, end="\n\n")
-                windows_toast(puzzle_name, output)
+                windows_toast(base_name.replace("-", " ").title(), output)
                 self.last_solution = solution
                 self.last_solution.source_name = 'last solve'
         except PermissionError as e:
             print(f'Tried to open file while still in use by system: {path}')
         return None
 
-    def create_output(self, solution: om.Solution) -> str:
+    def create_output(self, solution: om.Solution, local_best: om.Solution) -> str:
         deltas = {}
         if self.last_solution.solved:
             deltas['last'] = create_delta_dict(solution, self.last_solution)
-        # deltas['best'] = self.create_delta_dict(solution, best_solution)
+        deltas['local'] = create_delta_dict(solution, local_best)
         try:
             online_solution = fetch_online(get_online_url(solution.puzzle.decode()))
             deltas['online'] = create_delta_dict(solution, online_solution)
         except ConnectionError as e:
             print(f"Could not fetch online: {e}")
         return format_output(solution, deltas)
-
-    def find_local_best(self, solution: om.Solution) -> om.Solution:
-       raise NotImplementedError
 
 
 if __name__ == '__main__':

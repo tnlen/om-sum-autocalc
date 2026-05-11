@@ -1,5 +1,6 @@
 /.venv
 /.idea
+/.images
 # download from the discord: https://discord.com/channels/278707932089155584/370367639073062922
 # see pinned messages, put next to om-sum-autocalc.py
 om.py
