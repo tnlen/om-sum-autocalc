@@ -2,15 +2,20 @@
 
 A small cli-tool to calculate the sum record for new solutions for Opus Magnum by Zachtronics.
 
+![image](https://raw.githubusercontent.com/tnlen/om-sum-autocalc/refs/heads/main/toast_screenshot.png)
+
 ## Installation
 **Currently only works on Windows**
 
-- Use `pip install -r requirements.txt` to install required packages (globally or in a virtual env).
-- Put [om.py](http://critelli.technology/om.py) by panic next to this script (TODO: make a flag to specify location instead.)
+- Clone this repo.
+- Use `pip install -r requirements.txt` to install required packages.
+- Put [om.py](http://critelli.technology/om.py) by panic next to this script.
 
-If you want windows notifications to be displayed over your game, turn off "Do Not Disturb" and go to 
-**Settings > System > Notifications > Focus Assist** and turn off
-"When I'm playing a game" and "When I'm using an app in full screen mode".
+If you want windows notifications to be displayed over OM:
+- Turn off "Do Not Disturb" 
+- Go to **Settings > System > Notifications > Focus Assist** and turn off:
+  - "When I'm playing a game" 
+  - "When I'm using an app in full screen mode".
 
 
 ## Usage
@@ -25,6 +30,5 @@ In no specific order. Feel free to open issues if you have any suggestions or fo
 - Add flag to specify om.py location
 - Add flag to disable toasts
 - Support for linux (feel free to fork for mac)
-- Compare to other local solutions
 - Create small image instead of text for colored deltas (not supported in windows notification texts)
 
