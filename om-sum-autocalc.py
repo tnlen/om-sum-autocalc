@@ -75,8 +75,8 @@ def find_local_best(current_path: Path, puzzle_display_name) -> om.Solution:
                map(lambda r: om.Solution(str(r)),
                    filter(lambda r: r!= current_path,
                           results))),
-        key=lambda s: solution_sum(s)
-    )
+        key=lambda s: solution_sum(s),
+    default=None)
     return best
 
 
@@ -130,7 +130,8 @@ class ChangeHandler(FileSystemEventHandler):
         deltas = {}
         if self.last_solution.solved:
             deltas['last'] = create_delta_dict(solution, self.last_solution)
-        deltas['local'] = create_delta_dict(solution, local_best)
+        if local_best:
+            deltas['local'] = create_delta_dict(solution, local_best)
         try:
             online_solution = fetch_online(get_online_url(solution.puzzle.decode()))
             deltas['online'] = create_delta_dict(solution, online_solution)
